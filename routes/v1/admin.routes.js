@@ -17,7 +17,7 @@ router.route("/meal-schedule").post(hasAdminAccess,controllers.mealPlanControlle
 // router.route("/chefs").post(hasAdminAccess,controllers.userController.getAllChefs);
 // router.route("/chef").post(hasAdminAccess,controllers.userController.createChef);
 router.route("/chef").post(hasAdminAccess,uploadFiles, handleFileUploadErrors,controllers.userController.createChef);
-router.route("/chef").post(uploadFiles, handleFileUploadErrors,controllers.userController.createChef); //
+router.route("/createchef").post(uploadFiles, handleFileUploadErrors,controllers.userController.createChef); // 
 // router.route("/chef").post(controllers.userController.loginChef);
 router.route("/chef").put(hasAdminAccess,controllers.userController.updateChefProfile);
 router.route("/chef/:userId").get(hasAdminAccess,controllers.userController.getChefDetails);

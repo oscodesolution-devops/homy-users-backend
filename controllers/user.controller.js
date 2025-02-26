@@ -354,22 +354,24 @@ export const LoginAdmin = async (req, res, next) => {
   }
 };
 const createChef = async (req, res, next) => {
+  console.log("Request is entering this route");
+
   try {
-    console.log(req.files)
+    console.log("Uploaded files:", req.files);
+
     // Validate required file uploads
-    if (!req.files || 
-        !req.files.profilePicture) {
-      return next(createCustomError('All files are required', 400));
+    if (!req.files || !req.files.profilePicture) {
+      return next(createCustomError('Profile picture is required', 400));
     }
 
     // Upload files to Cloudinary
     const [profilePictureUrl, resumeUrl, characterCertificateUrl] = await Promise.all([
       uploadToCloudinary(req.files.profilePicture[0], 'profile-pictures'),
-      // uploadToCloudinary(req.files.resume[0], 'resumes'),
-      // uploadToCloudinary(req.files.characterCertificate[0], 'character-certificates')
+      req.files.resume ? uploadToCloudinary(req.files.resume[0], 'resumes') : Promise.resolve(null),
+      req.files.characterCertificate ? uploadToCloudinary(req.files.characterCertificate[0], 'character-certificates') : Promise.resolve(null)
     ]);
 
-    // Parse JSON arrays from string
+    // Function to parse JSON arrays safely
     const parseJsonArray = (field) => {
       try {
         return JSON.parse(req.body[field] || '[]');
@@ -385,23 +387,23 @@ const createChef = async (req, res, next) => {
       profilePicture: profilePictureUrl,
       resume: resumeUrl,
       characterCertificate: characterCertificateUrl,
-      canCook: req.body.canCook === 'true',
+      canCook: JSON.parse(req.body.canCook || 'false'),
       previousWorkplace: parseJsonArray('previousWorkplace'),
-      readyForHomeKitchen: req.body.readyForHomeKitchen === 'true',
+      readyForHomeKitchen: JSON.parse(req.body.readyForHomeKitchen || 'false'),
       preferredCities: parseJsonArray('preferredCities'),
       currentCity: req.body.currentCity,
       currentArea: req.body.currentArea,
       cuisines: parseJsonArray('cuisines'),
       travelMode: req.body.travelMode,
-      cooksNonVeg: req.body.cooksNonVeg === 'true',
+      cooksNonVeg: JSON.parse(req.body.cooksNonVeg || 'false'),
       readingLanguage: req.body.readingLanguage,
       experienceYears: req.body.experienceYears,
-      currentSalary: parseFloat(req.body.currentSalary),
+      currentSalary: parseFloat(req.body.currentSalary) || 0,
       businessName: req.body.businessName,
-      address: req.body.address,
-      PhoneNo: req.body.PhoneNo,
-      document: req.body.document,
-      verificationStatus: req.body.verificationStatus,
+      address: req.body.address ? JSON.parse(req.body.address) : null,
+      PhoneNo: req.body.PhoneNo || null,
+      document: req.body.document ? JSON.parse(req.body.document) : null,
+      verificationStatus: req.body.verificationStatus || 'Pending',
     });
 
     // Save chef
@@ -411,12 +413,13 @@ const createChef = async (req, res, next) => {
     const response = sendSuccessApiResponse("Chef created successfully", {
       chef: {
         id: savedChef._id,
-        ...savedChef.toObject()
-      }
+        ...savedChef.toObject(),
+      },
     });
 
     res.status(201).send(response);
   } catch (error) {
+    console.error("Error in createChef:", error);
     next(error);
   }
 };
