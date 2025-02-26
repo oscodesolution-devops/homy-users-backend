@@ -396,7 +396,12 @@ const createChef = async (req, res, next) => {
       cooksNonVeg: req.body.cooksNonVeg === 'true',
       readingLanguage: req.body.readingLanguage,
       experienceYears: req.body.experienceYears,
-      currentSalary: parseFloat(req.body.currentSalary)
+      currentSalary: parseFloat(req.body.currentSalary),
+      businessName: req.body.businessName,
+      address: req.body.address,
+      PhoneNo: req.body.PhoneNo,
+      document: req.body.document,
+      verificationStatus: req.body.verificationStatus,
     });
 
     // Save chef
