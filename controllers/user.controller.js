@@ -5,6 +5,16 @@ import db from "../models/index.js";
 import calculateHealthScore from "../utils/calculateHealthScore.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
+
+// Load environment variables from .env file
+dotenv.config();
+
+import twilio from 'twilio';
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+const verifySid = process.env.TWILIO_VERIFY_SID;
+const client = twilio(accountSid, authToken);
 
 const updateUser = async (req, res, next) => {
   const { firstName, lastName, email, address } = req.body;
@@ -166,26 +176,26 @@ const getAllUsers = async (req, res, next) => {
 
 const getUserDetails = async (req, res, next) => {
   try {
-    let {userId} = req.params;
-    if(!userId){
+    let { userId } = req.params;
+    if (!userId) {
       userId = req.user._id
     }
     const user = await db.User.findOne({ _id: userId }).populate("activePlan");
     let userDetails = await db.UserDetails.findOne({
       userID: userId,
     });
-   
+
     let order;
-    if(user?.activePlan){
-       order = await db.Order.findOne({user: userId,planID:user.activePlan._id})
+    if (user?.activePlan) {
+      order = await db.Order.findOne({ user: userId, planID: user.activePlan._id })
     }
     if (!userDetails && !user) {
       return next(createCustomError("User details not found", 404));
     }
-  
+
     const response = sendSuccessApiResponse(
       "User details retrieved successfully",
-      { userDetails, user , order}
+      { userDetails, user, order }
     );
     console.log(response)
     return res.status(200).send(response);
@@ -427,7 +437,7 @@ const createChef = async (req, res, next) => {
 const deleteChef = async (req, res, next) => {
   try {
     const { chefId } = req.params;
-    console.log("gell",chefId)
+    console.log("gell", chefId)
 
     // Find and delete the chef
     const deletedChef = await db.Chef.findByIdAndDelete(chefId);
@@ -437,7 +447,7 @@ const deleteChef = async (req, res, next) => {
       return next(createCustomError('Chef not found', 404));
     }
     await db.Order.updateMany(
-      { chef: chefId }, 
+      { chef: chefId },
       { $set: { chef: null } }
     );
     // Delete associated files from Cloudinary (optional but recommended)
@@ -464,51 +474,78 @@ const deleteChef = async (req, res, next) => {
   }
 };
 
-const loginChef = async (req, res, next) => {
+// const loginChef = async (req, res, next) => {
+//   try {
+//     const { email, password } = req.body;
+
+//     // Check if chef exists
+//     const chef = await db.Chef.findOne({ email });
+//     if (!chef) {
+//       return next(createCustomError("Invalid credentials", 401));
+//     }
+
+//     // Check if chef is active
+//     if (!chef.isActive) {
+//       return next(createCustomError("Account is deactivated", 403));
+//     }
+
+//     // Verify password
+//     const isPasswordValid = await bcrypt.compare(password, chef.password);
+//     if (!isPasswordValid) {
+//       return next(createCustomError("Invalid credentials", 401));
+//     }
+
+//     // Create JWT token
+//     const token = jwt.sign({ id: chef._id }, process.env.JWT_SECRET, {
+//       expiresIn: "24h",
+//     });
+
+//     const response = sendSuccessApiResponse("Login successful", {
+//       chef: {
+//         id: chef._id,
+//         firstname: chef.firstname,
+//         lastname: chef.lastname,
+//         email: chef.email,
+//         experience: chef.experience,
+//         rating: chef.rating,
+//         speciality: chef.speciality,
+//         isActive: chef.isActive,
+//       },
+//       token,
+//     });
+
+//     res.status(200).send(response);
+//   } catch (error) {
+//     next(error);
+//   }
+// };
+
+// Send OTP for verification
+
+
+const sendOtp = async (req, res) => {
+  console.log("ssssssssssssssssssssssss:", verifySid)
   try {
-    const { email, password } = req.body;
+    const { PhoneNo } = req.body;
 
-    // Check if chef exists
-    const chef = await db.Chef.findOne({ email });
-    if (!chef) {
-      return next(createCustomError("Invalid credentials", 401));
+    if (!PhoneNo.startsWith('+')) {
+      return res.status(400).json({ error: "Phone number must be in E.164 format (e.g., +1234567890)" });
     }
 
-    // Check if chef is active
-    if (!chef.isActive) {
-      return next(createCustomError("Account is deactivated", 403));
-    }
+    const user = await db.Chef.findOne({ PhoneNo });
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, chef.password);
-    if (!isPasswordValid) {
-      return next(createCustomError("Invalid credentials", 401));
-    }
+    // Send OTP via Twilio Verify API
+    const verification = await client.verify.v2.services(verifySid)
+      .verifications
+      .create({ to: PhoneNo, channel: 'sms' });
 
-    // Create JWT token
-    const token = jwt.sign({ id: chef._id }, process.env.JWT_SECRET, {
-      expiresIn: "24h",
-    });
-
-    const response = sendSuccessApiResponse("Login successful", {
-      chef: {
-        id: chef._id,
-        firstname: chef.firstname,
-        lastname: chef.lastname,
-        email: chef.email,
-        experience: chef.experience,
-        rating: chef.rating,
-        speciality: chef.speciality,
-        isActive: chef.isActive,
-      },
-      token,
-    });
-
-    res.status(200).send(response);
+    res.json({ message: "OTP sent successfully", verificationSid: verification.sid });
   } catch (error) {
-    next(error);
+    res.status(500).json({ error: error.message });
   }
 };
+
 
 const updateChefProfile = async (req, res, next) => {
   try {
@@ -575,9 +612,9 @@ const updateChefProfile = async (req, res, next) => {
   }
 };
 
-const getChefDetails = async (req,res,next)=>{
+const getChefDetails = async (req, res, next) => {
   try {
-    const {userId} = req.params;
+    const { userId } = req.params;
     const chef = await db.Chef.findOne({ _id: userId });
     // let userDetails = await db.UserDetails.findOne({
     //   userID: userId,
@@ -586,7 +623,7 @@ const getChefDetails = async (req,res,next)=>{
     if (!chef) {
       return next(createCustomError("Chef details not found", 404));
     }
-  
+
     const response = sendSuccessApiResponse(
       "Chef details retrieved successfully",
       { chef }
@@ -609,10 +646,13 @@ const userController = {
   LoginAdmin,
   createAdmin,
   createChef,
-  loginChef,
+
+  sendOtp,
   updateChefProfile,
   getChefDetails,
   deleteChef,
 };
+
+// loginChef,
 
 export default userController;

@@ -4,7 +4,6 @@ const chefSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    maxlength: 100
   },
   gender: {
     type: String,
@@ -31,7 +30,7 @@ const chefSchema = new mongoose.Schema({
     default: []
   },
   readyForHomeKitchen: {
-    type: Boolean,   
+    type: Boolean,
   },
   preferredCities: {
     type: [String],
@@ -69,52 +68,56 @@ const chefSchema = new mongoose.Schema({
   },
   address: {
     address1: {
-        type: String,
-        // required: true
+      type: String,
+      // required: true
     },
     address2: {
-        type: String
+      type: String
     },
     city: {
-        type: String,
-        // required: true
+      type: String,
+      // required: true
     },
     state: {
-        type: String,
-        // required: true
+      type: String,
+      // required: true
     },
     pincode: {
-        type: String,
-        // required: true
+      type: String,
+      // required: true
     }
   },
   PhoneNo: {
     type: String,
     // required: true,
-    unique: true,
+    // unique: true,
     minLength: 10,
     maxLength: 13,
-    trim:true
+    trim: true
   },
   document: {
     type: {
-        type: String,
-        // required: true
+      type: String,
+      // required: true
     },
     documentNo: {
-        type: String,
-        // required: true
+      type: String,
+      // required: true
     },
     docsPhoto: {
-        front: {
-            type: String,
-            // required: true
-        },
-        back: {
-            type: String,
-            // required: true
-        }
+      front: {
+        type: String,
+        // required: true
+      },
+      back: {
+        type: String,
+        // required: true
+      }
     }
+  },
+  homemakerServices: {
+    type: Boolean,
+    default: false
   },
   verificationStatus: {
     type: String,
