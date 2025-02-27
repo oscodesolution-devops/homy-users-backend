@@ -3,12 +3,12 @@ import mongoose from "mongoose";
 const chefSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true,
+    // required: true,
   },
   gender: {
     type: String,
     enum: ['male', 'female', 'other'],
-    required: true
+    // required: true
   },
   profilePicture: {
     type: String, // Store file path or URL

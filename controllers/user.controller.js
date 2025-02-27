@@ -547,6 +547,40 @@ const sendOtp = async (req, res) => {
 };
 
 
+const verifyOtp = async (req, res) => {
+  try {
+      const { PhoneNo, otp } = req.body;
+
+      // Verify OTP using Twilio
+      const verificationCheck = await client.verify.v2.services(verifySid)
+          .verificationChecks
+          .create({ to: PhoneNo, code: otp });
+
+      if (verificationCheck.status === 'approved') {
+          const user = await db.Chef.findOne({ PhoneNo });
+          if (!user) {
+              return res.status(404).json({ error: "User not found" });
+          }
+
+          const token = jwt.sign(
+              { id: user._id, PhoneNo: user.PhoneNo },
+              process.env.JWT_SECRET,
+              { expiresIn: "7d" }
+          );
+
+          res.json({
+              message: "OTP verified successfully",
+              token: token,
+              user: user
+          });
+      } else {
+          res.status(400).json({ error: "Invalid OTP" });
+      }
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
+};
+
 const updateChefProfile = async (req, res, next) => {
   try {
     const { firstname, lastname, experience, rating, speciality, isActive } =
@@ -612,6 +646,40 @@ const updateChefProfile = async (req, res, next) => {
   }
 };
 
+const updateVerificationStatus = async (req, res, next) => {
+  try {
+    const { verificationStatus , chefId} = req.body;
+    if (!chefId || !verificationStatus) {
+      return res.status(400).json({ message: "chefId and verificationStatus are required." });
+    }
+
+    if (!["Pending", "Verified", "Rejected"].includes(verificationStatus)) {
+      return res.status(400).json({ message: "Invalid verification status." });
+    }
+
+    const updatedChef = await db.Chef.findByIdAndUpdate(
+      chefId,
+      { verificationStatus },
+      { new: true }
+    );
+
+    if (!updatedChef) {
+      return res.status(404).json({ message: "Chef not found." });
+    }
+
+    res.status(200).json({
+      message: "Verification status updated successfully.",
+      data: updatedChef,
+    });
+  } catch (error) {
+    console.error("Error updating verification status:", error);
+    next(error); // Error handling middleware ko bhejne ke liye
+  }
+};
+
+
+
+
 const getChefDetails = async (req, res, next) => {
   try {
     const { userId } = req.params;
@@ -646,8 +714,9 @@ const userController = {
   LoginAdmin,
   createAdmin,
   createChef,
-
+  updateVerificationStatus,
   sendOtp,
+  verifyOtp,
   updateChefProfile,
   getChefDetails,
   deleteChef,
