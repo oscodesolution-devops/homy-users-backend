@@ -57,8 +57,17 @@ const upload = multer({
 const uploadFiles = upload.fields([
   { name: 'profilePicture', maxCount: 1 },
   { name: 'resume', maxCount: 1 },
-  { name: 'characterCertificate', maxCount: 1 }
+  { name: 'characterCertificate', maxCount: 1 },
+  { name: 'document.front', maxCount: 1 }, // Added document front
+  { name: 'document.back', maxCount: 1 }   // Added document back
 ]);
+
+const uploadFilesforpatner = upload.fields([
+  { name: 'profilePicture', maxCount: 1 },
+  { name: 'document.front', maxCount: 1 }, // Added document front
+  { name: 'document.back', maxCount: 1 }   // Added document back
+]);
+
 
 // Error handling middleware for file uploads
 const handleFileUploadErrors = (err, req, res, next) => {
@@ -76,4 +85,4 @@ const handleFileUploadErrors = (err, req, res, next) => {
   next();
 };
 
-export { uploadFiles, handleFileUploadErrors, uploadToCloudinary };
+export { uploadFiles, handleFileUploadErrors, uploadToCloudinary,uploadFilesforpatner };

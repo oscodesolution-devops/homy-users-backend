@@ -242,18 +242,80 @@ const orderController = {
   assignChefToOrder: async (req, res) => {
     const { orderId } = req.params;
     const { chefId } = req.body;
+  
     try {
       const order = await db.Order.findByIdAndUpdate(
         orderId,
         { chef: chefId },
         { new: true }
       );
-      console.log(order);
-      res.status(200).json(order);
+  
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+        const chef = await db.Chef.findByIdAndUpdate(
+        chefId,
+        { $push: { orders: orderId } }, // Add orderId to chef's orders array
+        { new: true }
+      );
+  
+      if (!chef) {
+        return res.status(404).json({ message: "Chef not found" });
+      }
+  
+      res.status(200).json({ message: "Chef assigned successfully", order, chef });
     } catch (error) {
+      console.error("Error assigning chef:", error);
       res.status(500).json({ message: "Error assigning chef to order", error });
     }
   },
+  
+  updateCheckinStatus:async (req,res)=>{
+    try {
+      const { id } = req.params;
+      if (!id) return res.status(400).json({ message: "Invalid order ID" });
+
+      const order = await db.Order.findById(id);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+
+      order.checkedInAt = new Date();
+      await order.save();
+
+      res.status(200).json({ message: "Chef checked in successfully", order });
+  } catch (error) {
+      res.status(500).json({ message: error.message });
+  }
+  },
+
+  updateCheckoutStatus:async (req,res)=>{
+    try {
+      const { id } = req.params;
+      if (!id) return res.status(400).json({ message: "Invalid order ID" });
+
+      const order = await db.Order.findById(id);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+
+
+      if (!req.files || req.files.length === 0) {
+          return res.status(400).json({ message: "No images uploaded!" });
+      }        
+      
+      order.checkedOutAt = new Date();
+      const uploadedImages = await Promise.all(
+          req.files.map(async (file) => {
+              return await uploadToCloudinary(file.path, "checkout_images");
+          })
+      );
+
+      order.checkoutImage.push(...uploadedImages); // Append Cloudinary URLs to order
+
+      await order.save();
+      res.status(200).json({ message: "Chef checked out successfully", order });
+  } catch (error) {
+      res.status(500).json({ message: error.message });
+  }
+  }
+
 };
 
 export default orderController;

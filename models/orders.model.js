@@ -79,20 +79,32 @@ const orderSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Chef',
     required: false
+  },
+  checkedInAt: {
+    type: Date,
+    default: null
+  },
+  checkedOutAt: {
+    type: Date,
+    default:null
+  },
+  checkoutImage: {
+    type: [String], // Ensure it's an array of strings (file paths)
+    default: [],
   }
 }, {
   timestamps: true // Enable built-in createdAt and updatedAt fields
 });
 
 // Mongoose middleware to set the expiresAt field
-orderSchema.pre('save', function(next) {
+orderSchema.pre('save', function (next) {
   const expirationDays = 7; // Set the expiration period (e.g., 7 days)
   this.expiresAt = new Date(this.createdAt.getTime() + expirationDays * 24 * 60 * 60 * 1000);
   next();
 });
 
 // Mongoose middleware to automatically cancel expired orders
-orderSchema.pre('save', async function(next) {
+orderSchema.pre('save', async function (next) {
   const now = new Date();
   if (this.status === 'pending' && this.expiresAt < now) {
     this.status = 'cancelled';

@@ -18,6 +18,7 @@ router.route("/meal-schedule").post(hasAdminAccess, controllers.mealPlanControll
 // router.route("/chef").post(hasAdminAccess,controllers.userController.createChef);
 router.route("/chef").post(hasAdminAccess, uploadFiles, handleFileUploadErrors, controllers.userController.createChef);
 router.route("/createchef").post(uploadFiles, handleFileUploadErrors, controllers.userController.createChef);
+// router.route("/createchefforpartner").post(uploadFilesforpatner, handleFileUploadErrors, controllers.userController.createChefForPartnerApp);
 // router.route("/chef").post(controllers.userController.loginChef);
 router.route("/sendOtpForChef").post(controllers.userController.sendOtp);
 router.route("/verifyOtpForLoginChef").post(controllers.userController.verifyOtp);
@@ -25,6 +26,7 @@ router.route("/verifyOtpForLoginChef").post(controllers.userController.verifyOtp
 
 router.route("/chef").put(hasAdminAccess, controllers.userController.updateChefProfile);
 router.route("/chef/:userId").get(hasAdminAccess, controllers.userController.getChefDetails);
+router.route("/chefById/:userId").get( controllers.userController.getChefById);
 router.route("/chef/:chefId").delete(hasAdminAccess, controllers.userController.deleteChef);
 router.route("/updateVerificationStatusChef").post(hasAdminAccess, controllers.userController.updateVerificationStatus);
 

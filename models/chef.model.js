@@ -18,6 +18,10 @@ const chefSchema = new mongoose.Schema({
     type: String, // Store file path or URL
     // required: true
   },
+  chefServices: {
+    type: String,
+  },
+  
   characterCertificate: {
     type: String, // Store file path or URL
     // required: true
@@ -115,15 +119,12 @@ const chefSchema = new mongoose.Schema({
       }
     }
   },
-  homemakerServices: {
-    type: Boolean,
-    default: false
-  },
   verificationStatus: {
     type: String,
     default: 'Pending',
     enum: ['Pending', 'Verified', 'Rejected']
-  }
+  },
+  orders: [{ type: mongoose.Schema.Types.ObjectId, ref: "Order" }]
 }, { timestamps: true });
 
 

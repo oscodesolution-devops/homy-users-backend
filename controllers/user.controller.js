@@ -13,7 +13,7 @@ dotenv.config();
 import twilio from 'twilio';
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
-const verifySid = process.env.TWILIO_VERIFY_SID;
+const verifySid = process.env.TWILIO_VERIFY_SERVICE_SID;
 const client = twilio(accountSid, authToken);
 
 const updateUser = async (req, res, next) => {
@@ -268,14 +268,17 @@ const searchChefs = async (req, res, next) => {
 export const getAllChefs = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const total = await db.Chef.countDocuments();
+    const limit = req.query.limit ? parseInt(req.query.limit) : total; // Agar limit na ho to sab chefs le ao
+
     const startIndex = (page - 1) * limit;
 
-    const total = await db.Chef.countDocuments();
     const chefs = await db.Chef.find()
       .skip(startIndex)
-      .limit(limit) // Exclude the password field
-    console.log(chefs)
+      .limit(limit); // Exclude the password field
+
+    console.log(chefs);
+
     const response = sendSuccessApiResponse("Chefs retrieved successfully", {
       chefs,
       totalPages: Math.ceil(total / limit),
@@ -288,6 +291,7 @@ export const getAllChefs = async (req, res) => {
     res.status(500).send(error);
   }
 };
+
 
 const createAdmin = async (req, res, next) => {
   try {
@@ -364,7 +368,7 @@ export const LoginAdmin = async (req, res, next) => {
   }
 };
 const createChef = async (req, res, next) => {
-  console.log("Request is entering this route");
+  console.log("Request is entering this route", req.body);
 
   try {
     console.log("Uploaded files:", req.files);
@@ -373,14 +377,14 @@ const createChef = async (req, res, next) => {
     if (!req.files || !req.files.profilePicture) {
       return next(createCustomError('Profile picture is required', 400));
     }
-
     // Upload files to Cloudinary
-    const [profilePictureUrl, resumeUrl, characterCertificateUrl] = await Promise.all([
-      uploadToCloudinary(req.files.profilePicture[0], 'profile-pictures'),
-      req.files.resume ? uploadToCloudinary(req.files.resume[0], 'resumes') : Promise.resolve(null),
-      req.files.characterCertificate ? uploadToCloudinary(req.files.characterCertificate[0], 'character-certificates') : Promise.resolve(null)
+    const [profilePictureUrl, resumeUrl, characterCertificateUrl, documentFrontUrl, documentBackUrl] = await Promise.all([
+      uploadToCloudinary(req.files?.profilePicture[0], 'profile-pictures'),
+      req.files?.resume ? uploadToCloudinary(req.files?.resume[0], 'resumes') : Promise.resolve(null),
+      req.files?.characterCertificate ? uploadToCloudinary(req.files?.characterCertificate[0], 'character-certificates') : Promise.resolve(null),
+      req.files['document.front'] ? uploadToCloudinary(req.files['document.front'][0], 'document-front') : Promise.resolve(null), // <-- Fix
+      req.files['document.back'] ? uploadToCloudinary(req.files['document.back'][0], 'document-back') : Promise.resolve(null)  // <-- Fix
     ]);
-
     // Function to parse JSON arrays safely
     const parseJsonArray = (field) => {
       try {
@@ -392,28 +396,35 @@ const createChef = async (req, res, next) => {
 
     // Create chef document
     const newChef = new db.Chef({
-      name: req.body.name,
-      gender: req.body.gender,
-      profilePicture: profilePictureUrl,
-      resume: resumeUrl,
+      name: req.body?.name,
+      gender: req.body?.gender || null,
+      profilePicture: profilePictureUrl || null,
+      resume: resumeUrl || null,
       characterCertificate: characterCertificateUrl,
-      canCook: JSON.parse(req.body.canCook || 'false'),
+      canCook: JSON.parse(req.body?.canCook || 'false'),
       previousWorkplace: parseJsonArray('previousWorkplace'),
-      readyForHomeKitchen: JSON.parse(req.body.readyForHomeKitchen || 'false'),
+      readyForHomeKitchen: JSON.parse(req.body?.readyForHomeKitchen || 'false'),
       preferredCities: parseJsonArray('preferredCities'),
-      currentCity: req.body.currentCity,
-      currentArea: req.body.currentArea,
+      currentCity: req.body?.currentCity,
+      currentArea: req.body?.currentArea,
       cuisines: parseJsonArray('cuisines'),
-      travelMode: req.body.travelMode,
+      travelMode: req.body?.travelMode,
       cooksNonVeg: JSON.parse(req.body.cooksNonVeg || 'false'),
-      readingLanguage: req.body.readingLanguage,
-      experienceYears: req.body.experienceYears,
-      currentSalary: parseFloat(req.body.currentSalary) || 0,
-      businessName: req.body.businessName,
-      address: req.body.address ? JSON.parse(req.body.address) : null,
-      PhoneNo: req.body.PhoneNo || null,
-      document: req.body.document ? JSON.parse(req.body.document) : null,
-      verificationStatus: req.body.verificationStatus || 'Pending',
+      readingLanguage: req.body?.readingLanguage,
+      experienceYears: req.body?.experienceYears,
+      currentSalary: parseFloat(req.body?.currentSalary) || 0,
+      businessName: req.body?.businessName,
+      address: req.body?.address ? JSON.parse(req.body?.address) : null,
+      PhoneNo: "+91" + req.body?.PhoneNo || null,
+      document: {
+        type: req.body?.documentType || null,
+        documentNo: req.body?.documentNo || null,
+        docsPhoto: {
+          front: documentFrontUrl,
+          back: documentBackUrl
+        }
+      },
+      verificationStatus: req.body?.verificationStatus || 'Pending',
     });
 
     // Save chef
@@ -426,13 +437,99 @@ const createChef = async (req, res, next) => {
         ...savedChef.toObject(),
       },
     });
-
-    res.status(201).send(response);
+    if(response.success = true){
+      res.status(201).send({statuscode:response.status.code,message:"Your Details Are Sent For Verification"});
+    }
+    else{
+      res.status(201).send({message: response.message});
+    }
+    
   } catch (error) {
     console.error("Error in createChef:", error);
     next(error);
   }
 };
+
+// const createChefForPartnerApp = async (req, res, next) => {
+//   console.log("Request is entering this route", req.body);
+
+//   try {
+//     console.log("Uploaded files:", req.files);
+
+//     // Validate required file uploads
+//     if (!req.files || !req.files.profilePicture) {
+//       return next(createCustomError('Profile picture is required', 400));
+//     }
+
+//     // Upload files to Cloudinary
+//     const [profilePictureUrl, documentFrontUrl, documentBackUrl] = await Promise.all([
+//       uploadToCloudinary(req.files?.profilePicture[0], 'profile-pictures'),
+//       // req.files?.resume ? uploadToCloudinary(req.files?.resume[0], 'resumes') : Promise.resolve(null),
+//       // req.files?.characterCertificate ? uploadToCloudinary(req.files?.characterCertificate[0], 'character-certificates') : Promise.resolve(null),
+//       req.files['document.front'] ? uploadToCloudinary(req.files['document.front'][0], 'document-front') : Promise.resolve(null), // <-- Fix
+//       req.files['document.back'] ? uploadToCloudinary(req.files['document.back'][0], 'document-back') : Promise.resolve(null)  // <-- Fix
+//     ]);
+
+
+//     // Function to parse JSON arrays safely
+//     const parseJsonArray = (field) => {
+//       try {
+//         return JSON.parse(req.body[field] || '[]');
+//       } catch {
+//         return [];
+//       }
+//     };
+
+//     // Create chef document
+//     const newChef = new db.Chef({
+//       name: req.body.name,
+//       gender: req.body.gender || null,
+//       profilePicture: profilePictureUrl || null,
+//       // resume: resumeUrl || null,
+//       // characterCertificate: characterCertificateUrl,
+//       canCook: JSON.parse(req.body.canCook || 'false'),
+//       previousWorkplace: parseJsonArray('previousWorkplace'),
+//       readyForHomeKitchen: JSON.parse(req.body.readyForHomeKitchen || 'false'),
+//       preferredCities: parseJsonArray('preferredCities'),
+//       currentCity: req.body.currentCity,
+//       currentArea: req.body.currentArea,
+//       cuisines: parseJsonArray('cuisines'),
+//       travelMode: req.body.travelMode,
+//       cooksNonVeg: JSON.parse(req.body.cooksNonVeg || 'false'),
+//       readingLanguage: req.body.readingLanguage,
+//       experienceYears: req.body.experienceYears,
+//       currentSalary: parseFloat(req.body.currentSalary) || 0,
+//       businessName: req.body.businessName,
+//       address: req.body.address ? JSON.parse(req.body.address) : null,
+//       PhoneNo: "+91" + req.body.PhoneNo || null,
+//       document: {
+//         type: req.body.documentType || null,
+//         documentNo: req.body.documentNo || null,
+//         docsPhoto: {
+//           front: documentFrontUrl,
+//           back: documentBackUrl
+//         }
+//       },
+//       verificationStatus: req.body.verificationStatus || 'Pending',
+//     });
+
+//     // Save chef
+//     const savedChef = await newChef.save();
+
+//     // Prepare response
+//     const response = sendSuccessApiResponse("Chef created successfully", {
+//       chef: {
+//         id: savedChef._id,
+//         ...savedChef.toObject(),
+//       },
+//     });
+
+//     res.status(201).send(response);
+//   } catch (error) {
+//     console.error("Error in createChef:", error);
+//     next(error);
+//   }
+// };
 
 const deleteChef = async (req, res, next) => {
   try {
@@ -540,7 +637,7 @@ const sendOtp = async (req, res) => {
       .verifications
       .create({ to: PhoneNo, channel: 'sms' });
 
-    res.json({ message: "OTP sent successfully", verificationSid: verification.sid });
+    res.json({ message: "OTP sent successfully", });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -549,35 +646,35 @@ const sendOtp = async (req, res) => {
 
 const verifyOtp = async (req, res) => {
   try {
-      const { PhoneNo, otp } = req.body;
+    const { PhoneNo, otp } = req.body;
 
-      // Verify OTP using Twilio
-      const verificationCheck = await client.verify.v2.services(verifySid)
-          .verificationChecks
-          .create({ to: PhoneNo, code: otp });
+    // Verify OTP using Twilio
+    const verificationCheck = await client.verify.v2.services(verifySid)
+      .verificationChecks
+      .create({ to: PhoneNo, code: otp });
 
-      if (verificationCheck.status === 'approved') {
-          const user = await db.Chef.findOne({ PhoneNo });
-          if (!user) {
-              return res.status(404).json({ error: "User not found" });
-          }
-
-          const token = jwt.sign(
-              { id: user._id, PhoneNo: user.PhoneNo },
-              process.env.JWT_SECRET,
-              { expiresIn: "7d" }
-          );
-
-          res.json({
-              message: "OTP verified successfully",
-              token: token,
-              user: user
-          });
-      } else {
-          res.status(400).json({ error: "Invalid OTP" });
+    if (verificationCheck.status === 'approved') {
+      const user = await db.Chef.findOne({ PhoneNo }).populate("orders");;
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
       }
+
+      const token = jwt.sign(
+        { id: user._id, PhoneNo: user.PhoneNo },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+      );
+
+      res.json({
+        message: "OTP verified successfully",
+        token: token,
+
+      });
+    } else {
+      res.status(400).json({ error: "Invalid OTP" });
+    }
   } catch (error) {
-      res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -648,7 +745,7 @@ const updateChefProfile = async (req, res, next) => {
 
 const updateVerificationStatus = async (req, res, next) => {
   try {
-    const { verificationStatus , chefId} = req.body;
+    const { verificationStatus, chefId } = req.body;
     if (!chefId || !verificationStatus) {
       return res.status(400).json({ message: "chefId and verificationStatus are required." });
     }
@@ -703,6 +800,16 @@ const getChefDetails = async (req, res, next) => {
   }
 }
 
+const getChefById = async (req, res) => {
+  try {
+    const user = await db.Chef.findById(req.params.id).populate("orders");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.status(200).json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const userController = {
   updateUser,
   createOrUpdateUserDetails,
@@ -720,6 +827,8 @@ const userController = {
   updateChefProfile,
   getChefDetails,
   deleteChef,
+  getChefById,
+  // createChefForPartnerApp
 };
 
 // loginChef,
