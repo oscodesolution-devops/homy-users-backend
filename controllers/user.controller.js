@@ -632,6 +632,11 @@ const sendOtp = async (req, res) => {
     const user = await db.Chef.findOne({ PhoneNo });
     if (!user) return res.status(404).json({ error: "User not found" });
 
+    // Check verification status
+    if (user.verificationStatus === 'Pending' || user.verificationStatus === 'Rejected') {
+      return res.status(403).json({ message: 'User is not verified. OTP cannot be sent.' });
+    }
+
     // Send OTP via Twilio Verify API
     const verification = await client.verify.v2.services(verifySid)
       .verifications
