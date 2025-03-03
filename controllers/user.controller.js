@@ -1032,22 +1032,30 @@ const updateChefProfileByApp = async (req, res, next) => {
     return next(createCustomError("Error updating chef profile", 500));
   }
 };
-const getChefOrderBychefId = async (req, res) =>{
-    try {
+const getChefOrderBychefId = async (req, res) => {
+  try {
       const { chefId } = req.params;
-      // Find the chef and populate the orders
-      const chef = await db.Chef.findById(chefId).populate("orders");
-      
+
+      // Find the chef and populate orders along with planID inside orders
+      const chef = await db.Chef.findById(chefId)
+          .populate({
+              path: "orders",
+              populate: {
+                  path: "planID",
+                  model: "Plan" // Yahan "Plan" aapke database ke model ka naam hoga
+              }
+          });
+
       if (!chef) {
-        return res.status(404).json({ message: "Chef not found" });
+          return res.status(404).json({ message: "Chef not found" });
       }
-  
+
       res.status(200).json({ orders: chef.orders });
-    } catch (error) {
+  } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Internal Server Error" });
-    }
-}
+  }
+};
 
 const userController = {
   updateUser,
