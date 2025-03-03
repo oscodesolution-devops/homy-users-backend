@@ -900,6 +900,139 @@ const createChefByApp = async (req, res, next) => {
   }
 };
 
+const getChefProfile = async (req, res, next) => {
+  try {
+    // No need to find the chef again as it's already in req.chef
+    const chef = req.chef;
+
+    const profileData = {
+      address: chef.address,
+      document: {
+        docsPhoto: {
+          front: chef.document.docsPhoto.front,
+          back: chef.document.docsPhoto.back
+        },
+        type: chef.document.type,
+        documentNo: chef.document.documentNo
+      },
+      _id: chef._id,
+      fullName: chef.name,
+      profilePic: chef.profilePicture,
+      businessName: chef.businessName,
+      PhoneNo: chef.PhoneNo,
+      chefServices: chef.chefServices,
+      homemakerServices: chef.homemakerServices,
+      verificationStatus: chef.verificationStatus,
+      createdAt: chef.createdAt,
+      updatedAt: chef.updatedAt
+    };
+
+    const response = sendSuccessApiResponse(
+      "Chef profile retrieved successfully",
+      profileData
+    );
+
+    return res.status(200).send(response);
+  } catch (error) {
+    console.error('Error fetching chef profile:', error);
+    return next(createCustomError("Error fetching chef profile", 500));
+  }
+};
+
+const updateChefProfileByApp = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updateFields = req.body;
+    
+    // Find the chef first
+    const existingChef = await db.Chef.findById(id);
+    
+    if (!existingChef) {
+      return res.status(404).json({
+        success: false,
+        message: "Chef not found"
+      });
+    }
+    
+    // Create update object
+    const updates = {};
+    
+    // Handle nested updates
+    if (updateFields.address) {
+      updates.address = {
+        ...existingChef.address.toObject(),
+        ...updateFields.address
+      };
+    }
+    
+    if (updateFields.document) {
+      updates.document = {
+        ...existingChef.document.toObject(),
+        ...updateFields.document,
+        docsPhoto: {
+          ...existingChef.document.docsPhoto,
+          ...(updateFields.document.docsPhoto || {})
+        }
+      };
+    }
+    
+    // Handle direct field updates
+    const directFields = [
+      'fullName', 'businessName', 'PhoneNo', 
+      'chefServices', 'homemakerServices', 'profilePic'
+    ];
+    
+    directFields.forEach(field => {
+      if (field in updateFields) {
+        // Map fullName to name in database
+        if (field === 'fullName') {
+          updates.name = updateFields.fullName;
+        } else if (field === 'profilePic') {
+          updates.profilePicture = updateFields.profilePic;
+        } else {
+          updates[field] = updateFields[field];
+        }
+      }
+    });
+
+    // Update chef
+    const updatedChef = await db.Chef.findByIdAndUpdate(
+      id,
+      { $set: updates },
+      { new: true }
+    );
+
+    // Format response
+    const response = {
+      message: "User updated successfully",
+      user: {
+        address: updatedChef.address,
+        document: {
+          docsPhoto: updatedChef.document.docsPhoto,
+          type: updatedChef.document.type,
+          documentNo: updatedChef.document.documentNo
+        },
+        _id: updatedChef._id,
+        fullName: updatedChef.name,
+        profilePic: updatedChef.profilePicture,
+        businessName: updatedChef.businessName,
+        PhoneNo: updatedChef.PhoneNo,
+        chefServices: updatedChef.chefServices,
+        homemakerServices: updatedChef.homemakerServices,
+        verificationStatus: updatedChef.verificationStatus,
+        createdAt: updatedChef.createdAt,
+        updatedAt: updatedChef.updatedAt,
+        __v: updatedChef.__v
+      }
+    };
+
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error('Error updating chef profile:', error);
+    return next(createCustomError("Error updating chef profile", 500));
+  }
+};
+
 const userController = {
   updateUser,
   createOrUpdateUserDetails,
@@ -918,7 +1051,9 @@ const userController = {
   getChefDetails,
   deleteChef,
   getChefById,
-  createChefByApp
+  createChefByApp,
+  getChefProfile,
+  updateChefProfileByApp
 };
 
 // loginChef,

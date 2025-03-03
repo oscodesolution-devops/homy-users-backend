@@ -5,6 +5,7 @@ const router = express.Router();
 import controllers from "../../controllers/index.js";
 import { hasAdminAccess } from "../../middlewares/authorization.js";
 import { handleFileUploadErrors, uploadFiles } from "../../middlewares/upload.js";
+import { authenticateChef } from "../../middlewares/appAuth.js";
 router.route("/create").post(controllers.userController.createAdmin);
 router.route("/login").post(controllers.userController.LoginAdmin);
 router.route("/dashboard").get(hasAdminAccess, controllers.applicationController.getDashboardData);
@@ -25,11 +26,12 @@ router.route("/verifyOtpForLoginChef").post(controllers.userController.verifyOtp
 
 
 router.route("/chef").put(hasAdminAccess, controllers.userController.updateChefProfile);
+router.route("/chef/profile").get(authenticateChef, controllers.userController.getChefProfile);
 router.route("/chef/:userId").get(hasAdminAccess, controllers.userController.getChefDetails);
-router.route("/chefById/:userId").get( controllers.userController.getChefById);
+router.route("/chefById/:userId").get(controllers.userController.getChefById);
 router.route("/chef/:chefId").delete(hasAdminAccess, controllers.userController.deleteChef);
 router.route("/updateVerificationStatusChef").post(hasAdminAccess, controllers.userController.updateVerificationStatus);
-
+router.route("/chef/profile/:id").put(controllers.userController.updateChefProfileByApp);
 
 
 // router.route("/chefs/:chefId").get(controllers.userController.);
