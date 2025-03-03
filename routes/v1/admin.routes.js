@@ -29,6 +29,7 @@ router.route("/chef").put(hasAdminAccess, controllers.userController.updateChefP
 router.route("/chef/profile").get(authenticateChef, controllers.userController.getChefProfile);
 router.route("/chef/:userId").get(hasAdminAccess, controllers.userController.getChefDetails);
 router.route("/chefById/:userId").get(controllers.userController.getChefById);
+router.route("/getOrderBychefId/:chefId").get(controllers.userController.getChefOrderBychefId);
 router.route("/chef/:chefId").delete(hasAdminAccess, controllers.userController.deleteChef);
 router.route("/updateVerificationStatusChef").post(hasAdminAccess, controllers.userController.updateVerificationStatus);
 router.route("/chef/profile/:id").put(controllers.userController.updateChefProfileByApp);
