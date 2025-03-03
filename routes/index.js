@@ -11,6 +11,7 @@ import {
 } from "../controllers/gallery.controller.js";
 import client from "../config/contentful.config.js";
 import Chef from "../models/chef.model.js";
+import { handleImageUpload } from "../middlewares/cloudinaryUpload.js";
 
 const router = express.Router();
 const formatImageUrl = (url) => `https:${url}`;
@@ -94,6 +95,8 @@ router.get("/api/v1/chef/images",async(req,res)=>{
   
 
 router.use("/api/v1", routerV1);
+
+router.use("/api/v1/upload-images", handleImageUpload);
 
 router.get(
   "/banner",

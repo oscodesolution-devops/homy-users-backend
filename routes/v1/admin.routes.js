@@ -43,4 +43,6 @@ router.route("/query/:queryId").get(hasAdminAccess, controllers.queryController.
 router.route("/query/:queryId").delete(hasAdminAccess, controllers.queryController.deleteQuery)
 router.route("/query/:queryId").put(hasAdminAccess, controllers.queryController.updateQueryStatus);
 
+router.route("/createChefByApp").post(controllers.userController.createChefByApp);
+
 export default router;

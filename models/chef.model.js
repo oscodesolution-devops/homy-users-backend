@@ -19,7 +19,8 @@ const chefSchema = new mongoose.Schema({
     // required: true
   },
   chefServices: {
-    type: String,
+    type: [String],
+    default: []
   },
   
   characterCertificate: {
@@ -124,7 +125,11 @@ const chefSchema = new mongoose.Schema({
     default: 'Pending',
     enum: ['Pending', 'Verified', 'Rejected']
   },
-  orders: [{ type: mongoose.Schema.Types.ObjectId, ref: "Order" }]
+  orders: [{ type: mongoose.Schema.Types.ObjectId, ref: "Order" }],
+  homemakerServices: {
+    type: Boolean,
+    default: false
+  },
 }, { timestamps: true });
 
 

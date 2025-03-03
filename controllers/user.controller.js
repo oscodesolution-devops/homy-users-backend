@@ -815,6 +815,91 @@ const getChefById = async (req, res) => {
   }
 };
 
+const createChefByApp = async (req, res, next) => {
+  try {
+    const {
+      fullName,
+      businessName,
+      address,
+      PhoneNo,
+      chefServices,
+      homemakerServices,
+      documentType,
+      documentNo,
+      profilePic,
+      documentFront,
+      documentBack
+    } = req.body;
+
+    // Validate required fields
+    if (!fullName || !businessName || !address || !PhoneNo || !documentType || 
+        !documentNo || !profilePic || !documentFront || !documentBack) {
+      return next(createCustomError("Please provide all required fields", 400));
+    }
+
+    // Validate phone number format
+    if (!PhoneNo.startsWith('+')) {
+      return next(createCustomError("Phone number must be in E.164 format (e.g., +919871543210)", 400));
+    }
+
+    // Check if chef with same phone number exists
+    const existingChef = await db.Chef.findOne({ PhoneNo });
+    if (existingChef) {
+      return next(createCustomError("Chef with this phone number already exists", 400));
+    }
+
+    // Create new chef
+    const newChef = new db.Chef({
+      name: fullName,
+      businessName,
+      address: {
+        address1: address.address1,
+        city: address.city,
+        state: address.state,
+        pincode: address.pincode
+      },
+      PhoneNo,
+      chefServices: chefServices || [],
+      homemakerServices: homemakerServices || false,
+      document: {
+        type: documentType,
+        documentNo: documentNo,
+        docsPhoto: {
+          front: documentFront,
+          back: documentBack
+        }
+      },
+      profilePicture: profilePic,
+      verificationStatus: 'Pending'
+    });
+
+    await newChef.save();
+
+    const response = sendSuccessApiResponse(
+      "Chef profile created successfully",
+      {
+        chef: {
+          id: newChef._id,
+          name: newChef.name,
+          businessName: newChef.businessName,
+          PhoneNo: newChef.PhoneNo,
+          verificationStatus: newChef.verificationStatus,
+          homemakerServices: newChef.homemakerServices
+        }
+      }
+    );
+
+    return res.status(201).send(response);
+
+  } catch (error) {
+    console.error('Error creating chef:', error);
+    if (error.name === 'ValidationError') {
+      return next(createCustomError(error.message, 400));
+    }
+    return next(createCustomError("Error creating chef profile", 500));
+  }
+};
+
 const userController = {
   updateUser,
   createOrUpdateUserDetails,
@@ -833,7 +918,7 @@ const userController = {
   getChefDetails,
   deleteChef,
   getChefById,
-  // createChefForPartnerApp
+  createChefByApp
 };
 
 // loginChef,
