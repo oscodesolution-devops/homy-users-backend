@@ -30,8 +30,8 @@ connectDB();
 // Express configuration
 app.set("port", process.env.PORT || 3000);
 app.use(compression());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true, limit: "5mb" }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // CORS configuration
 app.use(cors(corsOptions));
 app.options("*", cors);
