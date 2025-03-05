@@ -213,6 +213,37 @@ const getAdminUserMealPlan = async (req, res, next) => {
   }
 };
 
+const getUserMealPlanById = async (req, res, next) => {
+  const { userId } = req.params;
+
+  if (!userId) {
+    return next(createCustomError("User ID is required", 400));
+  }
+
+  try {
+    // Find meal plans for the specified user
+    const mealPlans = await db.MealPlan.find({ userId })
+      .sort({ date: -1 })
+      .limit(30);
+
+    if (!mealPlans || mealPlans.length === 0) {
+      const response = sendSuccessApiResponse(
+        "No meal plans found for this user",
+        []
+      );
+      return res.status(200).send(response);
+    }
+
+    const response = sendSuccessApiResponse(
+      "Meal plans retrieved successfully",
+      mealPlans
+    );
+    return res.status(200).send(response);
+  } catch (error) {
+    console.error(error);
+    return next(createCustomError("Error retrieving meal plans", 500));
+  }
+};
 
 const mealPlanController = {
   getAdminUserMealPlan,
@@ -221,6 +252,7 @@ const mealPlanController = {
   updateMealPlan,
   deleteMealPlan,
   deleteMealType,
+  getUserMealPlanById,
 };
 
 export default mealPlanController;

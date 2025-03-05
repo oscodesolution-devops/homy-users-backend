@@ -20,4 +20,7 @@ router.route("/delete").delete(isLoggedIn, controllers.mealPlanController.delete
 // Route to delete a specific meal type from a meal plan based on date and meal type
 router.route("/delete-meal").delete(isLoggedIn, controllers.mealPlanController.deleteMealType);
 
+// Route to get meal plan for a specific user
+router.route("/user/:userId").get(controllers.mealPlanController.getUserMealPlanById);
+
 export default router;
