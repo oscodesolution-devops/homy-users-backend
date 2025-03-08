@@ -59,7 +59,8 @@ const uploadFiles = upload.fields([
   { name: 'resume', maxCount: 1 },
   { name: 'characterCertificate', maxCount: 1 },
   { name: 'document.front', maxCount: 1 }, // Added document front
-  { name: 'document.back', maxCount: 1 }   // Added document back
+  { name: 'document.back', maxCount: 1 },   // Added document back
+  { name: 'postImage', maxCount: 1 }
 ]);
 
 const uploadFilesforpatner = upload.fields([

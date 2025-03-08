@@ -130,11 +130,11 @@ const orderController = {
       }
 
       await db.User.findOneAndUpdate(
-        {_id: order.user},
+        { _id: order.user },
         {
           activePlan: order.planID
         },
-        { new: true}
+        { new: true }
       )
 
       const response = sendSuccessApiResponse(
@@ -204,17 +204,17 @@ const orderController = {
       const startIndex = (page - 1) * limit;
 
       // Create a search filter
-      const searchFilter = search 
+      const searchFilter = search
         ? {
-            $or: [
-              { orderNumber: { $regex: search, $options: 'i' } },
-              { 'user.firstName': { $regex: search, $options: 'i' } },
-              { 'user.lastName': { $regex: search, $options: 'i' } },
-              { 'chef.firstname': { $regex: search, $options: 'i' } },
-              { 'chef.lastname': { $regex: search, $options: 'i' } },
-              { status: { $regex: search, $options: 'i' } }
-            ]
-          }
+          $or: [
+            { orderNumber: { $regex: search, $options: 'i' } },
+            { 'user.firstName': { $regex: search, $options: 'i' } },
+            { 'user.lastName': { $regex: search, $options: 'i' } },
+            { 'chef.firstname': { $regex: search, $options: 'i' } },
+            { 'chef.lastname': { $regex: search, $options: 'i' } },
+            { status: { $regex: search, $options: 'i' } }
+          ]
+        }
         : {};
 
       // Count total orders matching the filter
@@ -231,7 +231,7 @@ const orderController = {
         orders,
         totalPages: Math.ceil(total / limit),
         currentPage: page,
-      });      
+      });
 
       return res.status(200).send(response);
     } catch (error) {
@@ -242,35 +242,35 @@ const orderController = {
   assignChefToOrder: async (req, res) => {
     const { orderId } = req.params;
     const { chefId } = req.body;
-  
+
     try {
       const order = await db.Order.findByIdAndUpdate(
         orderId,
         { chef: chefId },
         { new: true }
       );
-  
+
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
       }
-        const chef = await db.Chef.findByIdAndUpdate(
+      const chef = await db.Chef.findByIdAndUpdate(
         chefId,
         { $push: { orders: orderId } }, // Add orderId to chef's orders array
         { new: true }
       );
-  
+
       if (!chef) {
         return res.status(404).json({ message: "Chef not found" });
       }
-  
+
       res.status(200).json({ message: "Chef assigned successfully", order, chef });
     } catch (error) {
       console.error("Error assigning chef:", error);
       res.status(500).json({ message: "Error assigning chef to order", error });
     }
   },
-  
-  updateCheckinStatus:async (req,res)=>{
+
+  updateCheckinStatus: async (req, res) => {
     try {
       const { id } = req.params;
       if (!id) return res.status(400).json({ message: "Invalid order ID" });
@@ -282,12 +282,12 @@ const orderController = {
       await order.save();
 
       res.status(200).json({ message: "Chef checked in successfully", order });
-  } catch (error) {
+    } catch (error) {
       res.status(500).json({ message: error.message });
-  }
+    }
   },
 
-  updateCheckoutStatus:async (req,res)=>{
+  updateCheckoutStatus: async (req, res) => {
     try {
       const { id } = req.params;
       if (!id) return res.status(400).json({ message: "Invalid order ID" });
@@ -297,24 +297,130 @@ const orderController = {
 
 
       if (!req.files || req.files.length === 0) {
-          return res.status(400).json({ message: "No images uploaded!" });
-      }        
-      
+        return res.status(400).json({ message: "No images uploaded!" });
+      }
+
       order.checkedOutAt = new Date();
       const uploadedImages = await Promise.all(
-          req.files.map(async (file) => {
-              return await uploadToCloudinary(file.path, "checkout_images");
-          })
+        req.files.map(async (file) => {
+          return await uploadToCloudinary(file.path, "checkout_images");
+        })
       );
 
       order.checkoutImage.push(...uploadedImages); // Append Cloudinary URLs to order
 
       await order.save();
       res.status(200).json({ message: "Chef checked out successfully", order });
-  } catch (error) {
+    } catch (error) {
       res.status(500).json({ message: error.message });
-  }
-  }
+    }
+  },
+
+
+
+  //i am trying to put logic in this.
+  updateCheckinStatusajay: async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const chefId = req.user._id;
+      const now = new Date();
+
+      //order find karenge ham
+      const order = await db.Order.findById(orderId);
+      if (!order) return res.status(404).json({ message: 'Order not found' });
+
+      //ham check karenge ki es order par ye chef asign hai ya nhi
+      if (order.chef.toString() !== chefId.toString()) {
+        return res.status(403).json({ message: 'Unauthorized access' });
+      }
+
+      //ham check karenge ki aaj chhuti to nhi hai chef ki
+      const today = new Date().toLocaleString('en-US', { weekday: 'long' });
+      if (order.chefDayOff === today) {
+        return res.status(400).json({ message: 'Today is your day off!' });
+      }
+
+      const morningTime = new Date(order.planStartDate);
+      morningTime.setHours(11, 0, 0, 0); // Morning Meal Time Fixed 11:00 AM
+      const morningEndTime = new Date(morningTime.getTime() + 2 * 60 * 60 * 1000); // 2 ghante tak valid
+
+      const eveningTime = new Date(order.planStartDate);
+      eveningTime.setHours(20, 0, 0, 0); // Evening Meal Time Fixed 08:00 PM
+      const eveningEndTime = new Date(eveningTime.getTime() + 2 * 60 * 60 * 1000);
+
+      // Check-in validation
+      if (!((now >= morningTime && now <= morningEndTime) || (now >= eveningTime && now <= eveningEndTime))) {
+        return res.status(400).json({ message: 'Check-in time is not valid! Chef can check-in only within 2 hours of meal time.' });
+      }
+
+      order.checkedInAt = now;
+      await order.save();
+
+      res.status(200).json({ message: 'Check-in successful!', order });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  },
+
+
+  updateCheckoutStatusajay: async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const chefId = req.user._id;
+      const now = new Date();
+
+      //order find karenge ham
+      const order = await db.Order.findById(orderId);
+      if (!order) return res.status(404).json({ message: 'Order not found' });
+
+      //ham check karenge ki es order par ye chef asign hai ya nhi
+      if (order.chef.toString() !== chefId.toString()) {
+        return res.status(403).json({ message: 'Unauthorized access' });
+      }
+
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ message: "No images uploaded!" });
+      }
+
+      const morningTime = new Date(order.planStartDate);
+      morningTime.setHours(11, 0, 0, 0); // Morning Meal Time Fixed 11:00 AM
+      const morningEndTime = new Date(morningTime.getTime() + 2 * 60 * 60 * 1000); // 2 ghante tak valid
+
+      const eveningTime = new Date(order.planStartDate);
+      eveningTime.setHours(20, 0, 0, 0); // Evening Meal Time Fixed 08:00 PM
+      const eveningEndTime = new Date(eveningTime.getTime() + 2 * 60 * 60 * 1000);
+
+
+      // Check-in validation
+      if (!((now >= morningTime && now <= morningEndTime) || (now >= eveningTime && now <= eveningEndTime))) {
+        return res.status(400).json({ message: 'Check-in time is not valid! Chef can check-in only within 2 hours of meal time.' });
+      }
+
+
+     // Image Upload to Cloudinary
+     let uploadedImages = [];
+     if (req.files && req.files.length > 0) {
+         uploadedImages = await Promise.all(
+             req.files.map(async (file) => {
+                 return await uploadToCloudinary(file.path, "checkout_images");
+             })
+         );
+     }
+
+     // Checkout details update karein
+     order.checkedOutAt = now;
+     order.checkinStatus = 'checked out'; // ✅ checkinStatus update kiya
+
+     if (uploadedImages.length > 0) {
+         order.checkoutImage.push(...uploadedImages); // ✅ Checkout images bhi store kar rahe hain
+     }
+
+     await order.save();
+     res.status(200).json({ message: 'Checkout successful!', order });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  },
 
 };
 

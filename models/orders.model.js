@@ -91,6 +91,12 @@ const orderSchema = new mongoose.Schema({
   checkoutImage: {
     type: [String], // Ensure it's an array of strings (file paths)
     default: [],
+  },
+
+  checkinStatus: { //i added it
+    type: String,
+    enum: ['not checked in', 'checked in', 'checked out'],
+    default: 'not checked in'
   }
 }, {
   timestamps: true // Enable built-in createdAt and updatedAt fields

@@ -1,4 +1,5 @@
 import { sendSuccessApiResponse } from "../middlewares/successApiResponse.js";
+import { uploadToCloudinary } from "../middlewares/upload.js";
 import db from "../models/index.js";
 
 // Get all posts with pagination
@@ -123,7 +124,7 @@ const updatePost = async (req, res, next) => {
 const deletePost = async (req, res, next) => {
     try {
         const postId = req.params.id;
-        const userId = req.user._id; // Assuming user ID is available from auth middleware
+        const userId = req.user?._id; // Assuming user ID is available from auth middleware
 
         const post = await db.Post.findOneAndDelete({ _id: postId, postBy: userId });
 
@@ -221,6 +222,36 @@ const getUserPosts = async (req, res, next) => {
     }
 };
 
+const createPostByAdmin = async (req, res, next) => {
+    try {
+        const { postDescription } = req.body;
+        const userId = req.user?._id; // Assuming user ID is available from auth middleware
+
+        if (!req.files || !req.files.postImage) {
+            return next(createCustomError('Profile picture is required', 400));
+        }
+        const postImageUrl = req.files?.postImage
+            ? await uploadToCloudinary(req.files.postImage[0], 'post-images')
+            : null;
+    
+        const post = new db.Post({
+            postBy: userId,
+            postImage: postImageUrl,
+            postDescription
+        });
+        await post.save();
+        const populatedPost = await post.populate('postBy', 'name');
+        const response = sendSuccessApiResponse(
+            "Post created successfully",
+            populatedPost,
+            201
+        );
+        return res.status(201).send(response);
+    } catch (error) {
+        next(error);
+    }
+};
+
 const postController = {
     getAllPosts,
     getPostById,
@@ -228,7 +259,8 @@ const postController = {
     updatePost,
     deletePost,
     toggleLike,
-    getUserPosts
+    getUserPosts,
+    createPostByAdmin
 };
 
 export default postController;

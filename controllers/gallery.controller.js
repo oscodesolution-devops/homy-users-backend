@@ -5,9 +5,9 @@ import fs from "fs"
 import db from "../models/index.js";
 
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
 
@@ -20,7 +20,7 @@ export const uploadImage = async (req, res) => {
         message: "No image file uploaded",
       });
     }
-    
+
     // Upload image to Cloudinary
     const uploadResult = await cloudinary.uploader.upload(req.file.path, {
       folder: "gallery", // optional: specify a folder in Cloudinary
@@ -30,17 +30,15 @@ export const uploadImage = async (req, res) => {
       ],
     });
 
-    
-
     // Save image URL to database
     const newGalleryImage = await db.Gallery.create({
       imageUrl: uploadResult.secure_url,
     });
     fs.unlink(req.file.path, (err) => {
-        if (err) {
-          console.error("Failed to delete local image file:", err);
-        }
-      });
+      if (err) {
+        console.error("Failed to delete local image file:", err);
+      }
+    });
     res.status(201).json({
       status: "success",
       data: {
