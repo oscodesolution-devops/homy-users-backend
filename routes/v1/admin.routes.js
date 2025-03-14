@@ -38,11 +38,11 @@ router.route("/chef/profile/:id").put(controllers.userController.updateChefProfi
 // router.route("/chefs/:chefId").get(controllers.userController.);
 router.route("/chefs/search").get(hasAdminAccess, controllers.userController.searchChefs);
 // router.route("/chefs").get(control);
-router.route("/orders").get(hasAdminAccess, controllers.orderController.getAllOrders);
+router.route("/orders").get(controllers.orderController.getAllOrders);
 
 // router.route("/chefs/:chefId/orders").get(controllers.orderController);
 
-router.route("/orders/:orderId/assign-chef").post(hasAdminAccess, controllers.orderController.assignChefToOrder);
+router.route("/orders/:orderId/assign-chef").post(controllers.orderController.assignChefToOrder);
 
 router.route("/orders/chefId").get(hasAdminAccess, controllers.orderController.getAllOrders);
 router.route("/query").get(hasAdminAccess, controllers.queryController.getAllQueries);
@@ -50,6 +50,7 @@ router.route("/query/:queryId").get(hasAdminAccess, controllers.queryController.
 router.route("/query/:queryId").delete(hasAdminAccess, controllers.queryController.deleteQuery)
 router.route("/query/:queryId").put(hasAdminAccess, controllers.queryController.updateQueryStatus);
 
+//App Side Registeration of Chef
 router.route("/createChefByApp").post(controllers.userController.createChefByApp);
 
 export default router;

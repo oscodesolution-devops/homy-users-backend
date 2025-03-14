@@ -223,7 +223,7 @@ const getUserMealPlanById = async (req, res, next) => {
   try {
     // Find meal plans for the specified user
     const mealPlans = await db.MealPlan.find({ userId })
-      .sort({ date: -1 })
+      .sort({ date: -1 }) // Sort by date in descending order
       .limit(30);
 
     if (!mealPlans || mealPlans.length === 0) {
@@ -234,9 +234,23 @@ const getUserMealPlanById = async (req, res, next) => {
       return res.status(200).send(response);
     }
 
+    // Transform and organize the data
+    const formattedMealPlans = mealPlans.reduce((acc, plan) => {
+      // Format date to be more readable
+      const formattedDate = new Date(plan.date).toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      acc[formattedDate] = plan.mealSchedule;
+      return acc;
+    }, {});
+
     const response = sendSuccessApiResponse(
       "Meal plans retrieved successfully",
-      mealPlans
+      formattedMealPlans
     );
     return res.status(200).send(response);
   } catch (error) {

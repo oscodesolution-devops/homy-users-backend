@@ -1034,26 +1034,95 @@ const updateChefProfileByApp = async (req, res, next) => {
 };
 const getChefOrderBychefId = async (req, res) => {
   try {
-      const { chefId } = req.params;
+    const { chefId } = req.params;
 
-      // Find the chef and populate orders along with planID inside orders
-      const chef = await db.Chef.findById(chefId)
-          .populate({
-              path: "orders",
-              populate: {
-                  path: "planID",
-                  model: "Plan" // Yahan "Plan" aapke database ke model ka naam hoga
-              }
-          });
+    const orders = await db.Order.find({ chef: chefId })
+      .populate([
+        {
+          path: "planID",
+          model: "Plan",
+          select: "type description"
+        },
+        {
+          path: "user",
+          model: "User",
+          select: "_id address"
+        }
+      ]);
 
-      if (!chef) {
-          return res.status(404).json({ message: "Chef not found" });
+    if (!orders || orders.length === 0) {
+      return res.status(200).json({
+        success: true,
+        orders: []
+      });
+    }
+
+    // Process orders
+    const processedOrders = await Promise.all(orders.map(async (order) => {
+      const normalizedDate = new Date(order.planStartDate);
+      normalizedDate.setUTCHours(0, 0, 0, 0);
+
+      // Get all meal plans for this user (last 30 days)
+      const mealPlans = await db.MealPlan.find({ 
+        userId: order.user._id,
+        date: {
+          $gte: normalizedDate,
+          $lt: new Date(normalizedDate.getTime() + 30 * 24 * 60 * 60 * 1000)
+        }
+      }).sort({ date: -1 });
+
+      // Format meal plans like getUserMealPlanById
+      const formattedMealPlans = mealPlans.reduce((acc, plan) => {
+        const formattedDate = new Date(plan.date).toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+
+        acc[formattedDate] = plan.mealSchedule;
+        return acc;
+      }, {});
+
+      // Create mealTimes object only with opted times
+      const mealTimes = {};
+      if (order.morningMealTime) {
+        mealTimes.morning = order.morningMealTime;
+      }
+      if (order.eveningMealTime) {
+        mealTimes.evening = order.eveningMealTime;
       }
 
-      res.status(200).json({ orders: chef.orders });
+      const orderDetails = {
+        orderId: order._id,
+        userId: order.user._id,
+        planStartDate: order.planStartDate,
+        totalPeople: order.totalPeople,
+        userAddress: order.user.address,
+        planDetails: {
+          type: order.planID.type,
+          description: order.planID.description
+        },
+        chefDayOff: order.chefDayOff,
+        specialInstruction: order.specialInstruction || null,
+        status: order.status,
+        checkedInAt: order.checkedInAt,
+        checkedOutAt: order.checkedOutAt,
+        mealPlan: Object.keys(formattedMealPlans).length > 0 ? formattedMealPlans : null,
+        mealTimes // Only include opted meal times
+      };
+
+      return orderDetails;
+    }));
+
+    res.status(200).json({
+      success: true,
+      orders: processedOrders
+    });
+
   } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: "Internal Server Error" });
+    console.error("Error fetching chef orders:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
