@@ -6,6 +6,7 @@ import calculateHealthScore from "../utils/calculateHealthScore.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import CheckInOut from "../models/CheckInOut.model.js";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -15,6 +16,8 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const verifySid = process.env.TWILIO_VERIFY_SERVICE_SID;
 const client = twilio(accountSid, authToken);
+
+const SERVICE_DAYS = 30; // change this value as service days needed
 
 const updateUser = async (req, res, next) => {
   const { firstName, lastName, email, address } = req.body;
@@ -1035,30 +1038,60 @@ const updateChefProfileByApp = async (req, res, next) => {
 const getChefOrderBychefId = async (req, res) => {
   try {
     const { chefId } = req.params;
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
 
-    const orders = await db.Order.find({ chef: chefId })
-      .populate([
-        {
-          path: "planID",
-          model: "Plan",
-          select: "type description"
-        },
-        {
-          path: "user",
-          model: "User",
-          select: "_id address"
-        }
-      ]);
+    const orders = await db.Order.find({
+      chef: chefId,
+      planStartDate: {
+        $lte: today
+      },
+      $expr: {
+        $lt: [
+          { $dateDiff: {
+            startDate: "$planStartDate",
+            endDate: today,
+            unit: "day"
+          }},
+          SERVICE_DAYS
+        ]
+      }
+    }).populate([
+      {
+        path: "planID",
+        model: "Plan",
+        select: "type description"
+      },
+      {
+        path: "user",
+        model: "User",
+        select: "_id address phoneNumber"
+      }
+    ]);
 
-    if (!orders || orders.length === 0) {
-      return res.status(200).json({
-        success: true,
-        orders: []
-      });
-    }
-
-    // Process orders
     const processedOrders = await Promise.all(orders.map(async (order) => {
+      // Calculate service days
+      const planStartDate = new Date(order.planStartDate);
+      planStartDate.setUTCHours(0, 0, 0, 0);
+      
+      const planEndDate = new Date(planStartDate.getTime() + (SERVICE_DAYS * 24 * 60 * 60 * 1000));
+      
+      // Calculate days since start (for completed service days)
+      const daysSinceStart = Math.floor((today - planStartDate) / (24 * 60 * 60 * 1000));
+      
+      // Calculate total service days excluding chef's day off
+      const totalServiceDays = SERVICE_DAYS - Math.floor(SERVICE_DAYS / 7); // Subtract weekly off days
+      
+      // Calculate completed service days excluding chef's day off
+      let completedServiceDays = 0;
+      for (let i = 0; i < daysSinceStart; i++) {
+        const currentDate = new Date(planStartDate.getTime() + (i * 24 * 60 * 60 * 1000));
+        const dayOfWeek = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
+        if (dayOfWeek !== order.chefDayOff) {
+          completedServiceDays++;
+        }
+      }
+
       const normalizedDate = new Date(order.planStartDate);
       normalizedDate.setUTCHours(0, 0, 0, 0);
 
@@ -1084,6 +1117,59 @@ const getChefOrderBychefId = async (req, res) => {
         return acc;
       }, {});
 
+      // Get today's date in the same format
+      const todayFormatted = today.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      // Find today's meal plan and fill missing meals from previous plans
+      let todayMenu = {};
+      if (mealPlans.length > 0) {
+        // Initialize meal structure
+        let breakfast = null;
+        let lunch = null;
+        let dinner = null;
+
+        // Go through meal plans from most recent to oldest until all meals are filled
+        for (const plan of mealPlans) {
+          const mealSchedule = plan.mealSchedule;
+          
+          // Fill in any missing meals
+          if (!breakfast && mealSchedule.breakfast) {
+            breakfast = mealSchedule.breakfast;
+          }
+          if (!lunch && mealSchedule.lunch) {
+            lunch = mealSchedule.lunch;
+          }
+          if (!dinner && mealSchedule.dinner) {
+            dinner = mealSchedule.dinner;
+          }
+
+          // Break if all meals are filled
+          if (breakfast && lunch && dinner) {
+            break;
+          }
+        }
+
+        // Create todayMenu based on meal times and available meals
+        if (order.morningMealTime && (breakfast || lunch)) {
+          const morningMeals = [breakfast, lunch]
+            .filter(meal => meal !== null)
+            .join(" / ");
+          
+          if (morningMeals) {
+            todayMenu.todayMorning = morningMeals;
+          }
+        }
+        
+        if (order.eveningMealTime && dinner) {
+          todayMenu.todayEvening = dinner;
+        }
+      }
+
       // Create mealTimes object only with opted times
       const mealTimes = {};
       if (order.morningMealTime) {
@@ -1093,10 +1179,71 @@ const getChefOrderBychefId = async (req, res) => {
         mealTimes.evening = order.eveningMealTime;
       }
 
+      // Create checkin status object for today
+      const todayCheckinStatus = {};
+      
+      if (order.morningMealTime) {
+        const [morningHours, morningMinutes] = order.morningMealTime.split(':');
+        const morningTime = new Date(today);
+        morningTime.setHours(parseInt(morningHours), parseInt(morningMinutes), 0, 0);
+
+        todayCheckinStatus.morning = {
+          mealTime: order.morningMealTime,
+          checkedIn: false,
+          checkedOut: false,
+          isTimeToCheckin: new Date() >= morningTime,
+          canCheckout: false
+        };
+      }
+
+      if (order.eveningMealTime) {
+        const [eveningHours, eveningMinutes] = order.eveningMealTime.split(':');
+        const eveningTime = new Date(today);
+        eveningTime.setHours(parseInt(eveningHours), parseInt(eveningMinutes), 0, 0);
+
+        todayCheckinStatus.evening = {
+          mealTime: order.eveningMealTime,
+          checkedIn: false,
+          checkedOut: false,
+          isTimeToCheckin: new Date() >= eveningTime,
+          canCheckout: false
+        };
+      }
+
+      // Check if there are any checkins/checkouts for today using the imported model
+      const todayCheckins = await CheckInOut.find({
+        orderId: order._id,
+        date: {
+          $gte: today,
+          $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000)
+        }
+      });
+
+      // Update status based on existing checkins
+      todayCheckins.forEach(record => {
+        if (record.mealTime === 'morning' && todayCheckinStatus.morning) {
+          todayCheckinStatus.morning.checkedIn = record.checkedIn;
+          todayCheckinStatus.morning.checkedOut = record.checkedOut;
+          todayCheckinStatus.morning.canCheckout = record.checkedIn && !record.checkedOut;
+        }
+        if (record.mealTime === 'evening' && todayCheckinStatus.evening) {
+          todayCheckinStatus.evening.checkedIn = record.checkedIn;
+          todayCheckinStatus.evening.checkedOut = record.checkedOut;
+          todayCheckinStatus.evening.canCheckout = record.checkedIn && !record.checkedOut;
+        }
+      });
+
       const orderDetails = {
         orderId: order._id,
         userId: order.user._id,
+        userPhoneNumber: order.user.phoneNumber,
         planStartDate: order.planStartDate,
+        planEndDate: planEndDate,
+        serviceProgress: {
+          completedDays: completedServiceDays,
+          totalDays: totalServiceDays,
+          displayText: `${completedServiceDays}/${totalServiceDays}`
+        },
         totalPeople: order.totalPeople,
         userAddress: order.user.address,
         planDetails: {
@@ -1106,10 +1253,10 @@ const getChefOrderBychefId = async (req, res) => {
         chefDayOff: order.chefDayOff,
         specialInstruction: order.specialInstruction || null,
         status: order.status,
-        checkedInAt: order.checkedInAt,
-        checkedOutAt: order.checkedOutAt,
         mealPlan: Object.keys(formattedMealPlans).length > 0 ? formattedMealPlans : null,
-        mealTimes // Only include opted meal times
+        mealTimes,
+        todayMenu,
+        todayCheckinStatus
       };
 
       return orderDetails;
@@ -1117,6 +1264,7 @@ const getChefOrderBychefId = async (req, res) => {
 
     res.status(200).json({
       success: true,
+      totalOrders: processedOrders.length,
       orders: processedOrders
     });
 
