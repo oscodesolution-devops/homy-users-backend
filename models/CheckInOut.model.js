@@ -24,7 +24,11 @@ const checkInOutSchema = new mongoose.Schema({
     default: false
   },
   checkinTime: Date,
-  checkoutTime: Date
+  checkoutTime: Date,
+  checkoutImage: {
+    type: String,
+    default: null
+  }
 });
 
 // Compound index to ensure one record per order per date per meal time

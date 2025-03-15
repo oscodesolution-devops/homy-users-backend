@@ -1179,57 +1179,71 @@ const getChefOrderBychefId = async (req, res) => {
         mealTimes.evening = order.eveningMealTime;
       }
 
-      // Create checkin status object for today
+      // Get today's start and end timestamps
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      // Create todayCheckinStatus object
       const todayCheckinStatus = {};
       
       if (order.morningMealTime) {
-        const [morningHours, morningMinutes] = order.morningMealTime.split(':');
-        const morningTime = new Date(today);
-        morningTime.setHours(parseInt(morningHours), parseInt(morningMinutes), 0, 0);
+        const [hours, minutes] = order.morningMealTime.split(':');
+        const morningTime = new Date();
+        morningTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
         todayCheckinStatus.morning = {
           mealTime: order.morningMealTime,
           checkedIn: false,
           checkedOut: false,
           isTimeToCheckin: new Date() >= morningTime,
-          canCheckout: false
+          canCheckout: false,
+          checkinTime: null,
+          checkoutTime: null
         };
       }
 
       if (order.eveningMealTime) {
-        const [eveningHours, eveningMinutes] = order.eveningMealTime.split(':');
-        const eveningTime = new Date(today);
-        eveningTime.setHours(parseInt(eveningHours), parseInt(eveningMinutes), 0, 0);
+        const [hours, minutes] = order.eveningMealTime.split(':');
+        const eveningTime = new Date();
+        eveningTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
         todayCheckinStatus.evening = {
           mealTime: order.eveningMealTime,
           checkedIn: false,
           checkedOut: false,
           isTimeToCheckin: new Date() >= eveningTime,
-          canCheckout: false
+          canCheckout: false,
+          checkinTime: null,
+          checkoutTime: null
         };
       }
 
-      // Check if there are any checkins/checkouts for today using the imported model
+      // Get today's check-in records
       const todayCheckins = await CheckInOut.find({
         orderId: order._id,
         date: {
-          $gte: today,
-          $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000)
+          $gte: todayStart,
+          $lte: todayEnd
         }
       });
 
+      console.log('Today\'s checkins:', todayCheckins); // Debug log
+
       // Update status based on existing checkins
       todayCheckins.forEach(record => {
-        if (record.mealTime === 'morning' && todayCheckinStatus.morning) {
-          todayCheckinStatus.morning.checkedIn = record.checkedIn;
-          todayCheckinStatus.morning.checkedOut = record.checkedOut;
-          todayCheckinStatus.morning.canCheckout = record.checkedIn && !record.checkedOut;
-        }
-        if (record.mealTime === 'evening' && todayCheckinStatus.evening) {
-          todayCheckinStatus.evening.checkedIn = record.checkedIn;
-          todayCheckinStatus.evening.checkedOut = record.checkedOut;
-          todayCheckinStatus.evening.canCheckout = record.checkedIn && !record.checkedOut;
+        const mealTimeKey = record.mealTime; // 'morning' or 'evening'
+        
+        if (todayCheckinStatus[mealTimeKey]) {
+          todayCheckinStatus[mealTimeKey] = {
+            ...todayCheckinStatus[mealTimeKey],
+            checkedIn: record.checkedIn,
+            checkedOut: record.checkedOut,
+            canCheckout: record.checkedIn && !record.checkedOut,
+            checkinTime: record.checkinTime ? record.checkinTime.toISOString() : null,
+            checkoutTime: record.checkoutTime ? record.checkoutTime.toISOString() : null
+          };
         }
       });
 

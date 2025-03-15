@@ -17,5 +17,24 @@ router.post('/order_checkIn/:orderId', isLoggedIn, controllers.orderController.u
 //update checkout status
 router.post('/order_checkOut/:orderId', isLoggedIn, controllers.orderController.updateCheckoutStatus);
 
+// Chef check-in endpoint
+router.post(
+  '/checkin/:orderId/:mealTime', 
+  controllers.orderController.checkIn
+);
+
+// Chef check-out endpoint (with image)
+router.post(
+  '/checkout/:orderId/:mealTime',
+  controllers.orderController.checkOut
+);
+
+// View check-in history
+router.get(
+  '/checkin-history/:orderId',
+  controllers.orderController.getCheckinHistory
+);
+
+router.get('/checkin-history-detailed/:orderId', controllers.orderController.getDetailedCheckinHistory);
 
 export default router;

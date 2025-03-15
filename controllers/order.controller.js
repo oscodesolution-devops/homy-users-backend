@@ -1,10 +1,12 @@
 import { createCustomError } from "../errors/customAPIError.js";
 import { sendSuccessApiResponse } from "../middlewares/successApiResponse.js";
+import CheckInOutModel from "../models/CheckInOut.model.js";
 import db from "../models/index.js";
 import {
   generateRazorpayOrder,
   verifyRazorpaySignature,
 } from "../services/razorpay.js";
+import CheckInOut from "../models/CheckInOut.model.js";
 
 const orderController = {
   // Generate a new order
@@ -422,6 +424,250 @@ const orderController = {
     }
   },
 
+  checkIn: async (req, res) => {
+    try {
+      const { orderId, mealTime } = req.params;
+      const { timestamp } = req.body;
+      
+      // Create the check-in time in UTC
+      const checkInTime = timestamp ? new Date(timestamp) : new Date();
+      
+      // Create the date for the record (start of the day in UTC)
+      const recordDate = new Date(checkInTime);
+      recordDate.setUTCHours(0, 0, 0, 0);
+
+      // Find existing record
+      let checkInRecord = await CheckInOut.findOne({
+        orderId,
+        date: recordDate,
+        mealTime
+      });
+
+      if (checkInRecord) {
+        // Update existing record
+        checkInRecord.checkedIn = true;
+        checkInRecord.checkinTime = checkInTime;
+        checkInRecord.checkedOut = false;
+        checkInRecord.checkoutTime = null;
+        checkInRecord.checkoutImage = null;
+        
+        await checkInRecord.save();
+      } else {
+        // Create new record
+        checkInRecord = await CheckInOut.create({
+          orderId,
+          date: recordDate,
+          mealTime,
+          checkedIn: true,
+          checkinTime: checkInTime
+        });
+      }
+
+      // Format the response with UTC times
+      const formattedResponse = {
+        ...checkInRecord.toObject(),
+        checkinTime: formatDateTime(checkInRecord.checkinTime),
+        checkoutTime: checkInRecord.checkoutTime ? formatDateTime(checkInRecord.checkoutTime) : null
+      };
+
+      res.status(200).json({
+        success: true,
+        message: 'Check-in successful',
+        data: formattedResponse
+      });
+
+    } catch (error) {
+      console.error("Error in checkIn:", error);
+      res.status(500).json({ message: error.message });
+    }
+  },
+
+  checkOut: async (req, res) => {
+    try {
+      const { orderId, mealTime } = req.params;
+      const { imageUrl, timestamp } = req.body;
+      
+      // Create the check-out time
+      const checkOutTime = timestamp ? new Date(timestamp) : new Date();
+      
+      // Create the date for finding the record (start of the day in UTC)
+      const recordDate = new Date(checkOutTime);
+      recordDate.setUTCHours(0, 0, 0, 0);
+
+      const checkInRecord = await CheckInOut.findOne({
+        orderId,
+        date: recordDate,
+        mealTime
+      });
+
+      if (!checkInRecord || !checkInRecord.checkedIn) {
+        return res.status(400).json({ message: 'Must check-in before checking out' });
+      }
+
+      checkInRecord.checkedOut = true;
+      checkInRecord.checkoutTime = checkOutTime; // Store the exact check-out time
+      checkInRecord.checkoutImage = imageUrl;
+      await checkInRecord.save();
+
+      res.status(200).json({
+        success: true,
+        message: 'Check-out successful',
+        data: checkInRecord
+      });
+
+    } catch (error) {
+      console.error("Error in checkOut:", error);
+      res.status(500).json({ message: error.message });
+    }
+  },
+
+  getCheckinHistory: async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { startDate, endDate } = req.query;
+
+      const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const end = endDate ? new Date(endDate) : new Date();
+
+      const checkInHistory = await CheckInOut.find({
+        orderId,
+        date: {
+          $gte: start,
+          $lte: end
+        }
+      }).sort({ date: -1 });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          totalDays: checkInHistory.length,
+          history: checkInHistory
+        }
+      });
+
+    } catch (error) {
+      console.error("Error in getCheckinHistory:", error);
+      res.status(500).json({ message: error.message });
+    }
+  },
+
+  getDetailedCheckinHistory: async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { startDate, endDate } = req.query;
+
+      // Find order and populate chef details
+      const order = await db.Order.findById(orderId)
+        .populate({
+          path: 'chef',
+          select: 'name phoneNumber profileImage'
+        })
+        .populate({
+          path: 'user',
+          select: 'name phoneNumber'
+        });
+
+      if (!order) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Order not found' 
+        });
+      }
+
+      // Calculate date range
+      const start = startDate ? new Date(startDate) : new Date(order.planStartDate);
+      const end = endDate ? new Date(endDate) : new Date();
+      start.setUTCHours(0, 0, 0, 0);
+      end.setUTCHours(23, 59, 59, 999);
+
+      const checkInRecords = await CheckInOut.find({
+        orderId: order._id,
+        date: {
+          $gte: start,
+          $lte: end
+        }
+      }).sort({ date: 1, mealTime: 1 });
+
+      // Group records by date without dayOfWeek and isChefDayOff
+      const groupedRecords = {};
+      checkInRecords.forEach(record => {
+        const dateKey = record.date.toISOString().split('T')[0];
+        if (!groupedRecords[dateKey]) {
+          groupedRecords[dateKey] = {
+            date: dateKey,
+            meals: {}
+          };
+        }
+
+        groupedRecords[dateKey].meals[record.mealTime] = {
+          checkedIn: record.checkedIn,
+          checkedOut: record.checkedOut,
+          checkinTime: record.checkinTime ? formatDateTime(record.checkinTime) : null,
+          checkoutTime: record.checkoutTime ? formatDateTime(record.checkoutTime) : null,
+          checkoutImage: record.checkoutImage,
+          status: getStatus(record)
+        };
+      });
+
+      const response = {
+        success: true,
+        orderDetails: {
+          orderId: order._id,
+          planStartDate: order.planStartDate,
+          planEndDate: order.planEndDate,
+          chefDetails: {
+            name: order.chef?.name || 'Not Assigned',
+            phoneNumber: order.chef?.phoneNumber,
+            profileImage: order.chef?.profileImage
+          },
+          userDetails: {
+            name: order.user?.name,
+            phoneNumber: order.user?.phoneNumber
+          },
+          mealTimings: {
+            morning: order.morningMealTime,
+            evening: order.eveningMealTime
+          }
+        },
+        dateRange: {
+          from: start.toISOString().split('T')[0],
+          to: end.toISOString().split('T')[0]
+        },
+        totalDays: Object.keys(groupedRecords).length,
+        history: Object.values(groupedRecords)
+      };
+
+      res.status(200).json(response);
+
+    } catch (error) {
+      console.error("Error in getDetailedCheckinHistory:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Internal Server Error" 
+      });
+    }
+  },
+
+};
+
+// Helper function to determine status
+const getStatus = (record) => {
+  if (!record.checkedIn) return 'PENDING';
+  if (record.checkedIn && !record.checkedOut) return 'CHECKED_IN';
+  if (record.checkedIn && record.checkedOut) return 'COMPLETED';
+  return 'UNKNOWN';
+};
+
+// Helper function to format dates consistently in UTC
+const formatDateTime = (date) => {
+  const d = new Date(date);
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const hours = String(d.getUTCHours()).padStart(2, '0');
+  const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+
+  return `${day}/${month}/${year}, ${hours}:${minutes}`;
 };
 
 export default orderController;

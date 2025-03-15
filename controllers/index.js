@@ -21,7 +21,7 @@ const controllers = {
     postController,
     orderController,
     couponController,
-    queryController,
-}
+    queryController
+};
 
 export default controllers;
